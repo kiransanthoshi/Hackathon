@@ -1,89 +1,106 @@
-import os
-import sys
-
 from flask import Flask, request
 from flask_cors import CORS
 import pandas as pd
 
-# Make sure imports work no matter where you run the script from
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
 from ai.src.friction_detector import detect_friction
+
 
 app = Flask(__name__)
 CORS(app)
 
-SESSION_FILE = os.path.join(BASE_DIR, "ai", "data", "raw", "session_features.csv")
+# Path to the generated session features file
+SESSION_FILE = "ai/data/raw/session_features.csv"
 
+
+# =========================================================
+# HOME ROUTE
+# =========================================================
 
 @app.route("/", methods=["GET"])
-def index():
+def home():
     return {
-        "message": "API is running",
-        "endpoints": {
-            "health": "GET /health",
-            "analyze": "POST /api/analyze  or  GET /api/analyze?session_id=123"
-        }
+        "message": "AI Friction Detection API is running",
+        "endpoints": [
+            "/health",
+            "/api/analyze"
+        ]
     }
 
 
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
 @app.route("/health", methods=["GET"])
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok"
+    }
 
 
-@app.route("/api/analyze", methods=["GET", "POST"])
+# =========================================================
+# AI FRICTION ANALYSIS
+# =========================================================
+
+@app.route("/api/analyze", methods=["POST"])
 def analyze():
-    # Accept session_id from JSON body (POST) or query string (GET)
-    if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        session_id = data.get("session_id")
-    else:
-        session_id = request.args.get("session_id")
+
+    # Get JSON data sent by the client
+    data = request.get_json()
+
+    if not data:
+        return {
+            "error": "JSON data is required"
+        }, 400
+
+    # Get session ID
+    session_id = data.get("session_id")
 
     if not session_id:
-        return {"error": "session_id is required"}, 400
+        return {
+            "error": "session_id is required"
+        }, 400
 
+    # Check whether session features file exists
     try:
         sessions = pd.read_csv(SESSION_FILE)
-
-        session = sessions[sessions["session_id"].astype(str) == str(session_id)]
-
-        if session.empty:
-            return {"error": "Session not found", "session_id": session_id}, 404
-
-        row = session.iloc[0]
-        friction_result = detect_friction(row)
-
-        return {
-            "customer_id": int(row["customer_id"]),
-            "session_id": str(row["session_id"]),
-            "friction_type": friction_result["friction_type"],
-            "risk_level": friction_result["risk_level"],
-            "likely_cause": friction_result["likely_cause"],
-            "evidence": friction_result["evidence"],
-            "recommended_action": friction_result["recommended_action"],
-        }
-
     except FileNotFoundError:
         return {
-            "error": "Session features file not found",
-            "file": SESSION_FILE
+            "error": "session_features.csv not found. Run the session feature generation script first."
         }, 500
 
-    except Exception as e:
-        return {"error": "Failed to analyze session", "details": str(e)}, 500
+    # Find requested session
+    session = sessions[
+        sessions["session_id"].astype(str) == str(session_id)
+    ]
 
+    if session.empty:
+        return {
+            "error": "Session not found",
+            "session_id": str(session_id)
+        }, 404
 
-@app.errorhandler(404)
-def not_found(e):
+    # Get first matching session
+    row = session.iloc[0]
+
+    # Run AI friction detection
+    result = detect_friction(row)
+
+    # Return final result
     return {
-        "error": "Route not found",
-        "available_routes": ["/", "/health", "/api/analyze"]
-    }, 404
+        "customer_id": str(row["customer_id"]),
+        "session_id": str(row["session_id"]),
+        **result
+    }
 
+
+# =========================================================
+# START FLASK SERVER
+# =========================================================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        debug=True,
+        host="127.0.0.1",
+        port=5000
+    )
