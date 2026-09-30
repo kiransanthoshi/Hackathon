@@ -1,48 +1,46 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_cors import CORS
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pandas as pd
 
 from ai.src.friction_detector import detect_friction
+
+
 app = Flask(__name__)
 CORS(app)
+
+SESSION_FILE = "ai/data/raw/session_features.csv"
 
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"})
+    return {"status": "ok"}
 
 
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
-    data = request.get_json(silent=True)
+    data = request.get_json()
 
-    if not data:
-        return jsonify({"error": "Request body must be JSON"}), 400
+    session_id = data.get("session_id")
 
-    customer_id = data.get("customer_id")
+    if not session_id:
+        return {"error": "session_id is required"}, 400
 
-    if not customer_id:
-        return jsonify({"error": "customer_id is required"}), 400
+    sessions = pd.read_csv(SESSION_FILE)
 
-    try:
-        features = {
-            "views": int(data.get("views", 0)),
-            "add_to_cart": int(data.get("add_to_cart", 0)),
-            "transactions": int(data.get("transactions", 0))
-        }
-    except (TypeError, ValueError):
-        return jsonify({
-            "error": "views, add_to_cart and transactions must be numbers"
-        }), 400
+    session = sessions[sessions["session_id"].astype(str) == str(session_id)]
 
-    result = detect_friction(features)
+    if session.empty:
+        return {"error": "Session not found"}, 404
 
-    result["customer_id"] = customer_id
+    row = session.iloc[0]
 
-    return jsonify(result)
+    result = detect_friction(row)
+
+    return {
+        "customer_id": str(row["customer_id"]),
+        "session_id": str(row["session_id"]),
+        **result
+    }
 
 
 if __name__ == "__main__":
