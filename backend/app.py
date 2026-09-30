@@ -37,7 +37,7 @@ def analyze():
     result = detect_friction(row)
 
     return {
-        "customer_id": str(row["customer_id"]),
+        "customer_id": int(row["customer_id"]),
         "session_id": str(row["session_id"]),
         **result
     }
