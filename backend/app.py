@@ -27,7 +27,9 @@ def analyze():
 
     sessions = pd.read_csv(SESSION_FILE)
 
-    session = sessions[sessions["session_id"].astype(str) == str(session_id)]
+    session = sessions[
+        sessions["session_id"].astype(str) == str(session_id)
+    ]
 
     if session.empty:
         return {"error": "Session not found"}, 404
