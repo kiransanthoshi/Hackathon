@@ -1,0 +1,6 @@
+# Large raw datasets
+ai/data/raw/*.csv
+
+# Python cache
+__pycache__/
+*.pyc
