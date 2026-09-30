@@ -1,6 +1,14 @@
 from flask import Flask, request
+from flask_cors import CORS
+import pandas as pd
+
+from ai.src.friction_detector import detect_friction
+
 
 app = Flask(__name__)
+CORS(app)
+
+SESSION_FILE = "ai/data/raw/session_features.csv"
 
 
 @app.route("/health", methods=["GET"])
@@ -12,18 +20,28 @@ def health():
 def analyze():
     data = request.get_json()
 
-    customer_id = data.get("customer_id")
+    session_id = data.get("session_id")
+
+    if not session_id:
+        return {"error": "session_id is required"}, 400
+
+    sessions = pd.read_csv(SESSION_FILE)
+
+    session = sessions[
+        sessions["session_id"].astype(str) == str(session_id)
+    ]
+
+    if session.empty:
+        return {"error": "Session not found"}, 404
+
+    row = session.iloc[0]
+
+    result = detect_friction(row)
 
     return {
-        "customer_id": customer_id,
-        "friction_type": "cart_abandonment",
-        "risk_level": "high",
-        "likely_cause": "Customer added a product to the cart but did not complete purchase",
-        "evidence": [
-            "1 add-to-cart event",
-            "0 transaction(s)"
-        ],
-        "recommended_action": "Offer checkout assistance or an alternative payment option"
+        "customer_id": int(row["customer_id"]),
+        "session_id": str(row["session_id"]),
+        **result
     }
 
 
