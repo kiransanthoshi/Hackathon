@@ -40,6 +40,7 @@ sessions["potential_friction"] = (
     (sessions["add_to_cart"] > 0) &
     (sessions["transactions"] == 0)
 )
+sessions.to_csv("ai/data/raw/session_features.csv", index=False)
 
 print("\n===== AI SESSION ANALYSIS =====")
 print("Sessions analyzed:", len(sessions))
